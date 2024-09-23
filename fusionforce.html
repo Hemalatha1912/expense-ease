@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        #app {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        nav button {
+            margin-right: 10px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        nav button:hover {
+            background-color: #388e3c;
+        }
+        .hidden {
+            display: none;
+        }
+        input, button {
+            margin-bottom: 10px;
+            display: block;
+            width: 100%;
+            padding: 10px;
+        }
+        #expense-chart {
+            width: 100%;
+            height: 400px;
+        }
+        .budget-alert {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Login Page -->
+        <div id="auth">
+            <div id="login-form">
+                <h2>Login</h2>
+                <input type="text" id="login-username" placeholder="Username">
+                <input type="password" id="login-password" placeholder="Password">
+                <button onclick="login()">Login</button>
+                <p>New user? <button onclick="showSignup()">Sign Up</button></p>
+            </div>
+            <div id="signup-form" class="hidden">
+                <h2>Sign Up</h2>
+                <input type="text" id="signup-username" placeholder="Username">
+                <input type="password" id="signup-password" placeholder="Password">
+                <input type="number" id="signup-salary" placeholder="Enter your salary">
+                <button onclick="signup()">Sign Up</button>
+                <p>Already have an account? <button onclick="showLogin()">Login</button></p>
+            </div>
+        </div>
+
+        <!-- Home Page -->
+        <div id="home" class="hidden">
+            <nav>
+                <button onclick="navigateTo('expense-tracking')">Expense Tracking</button>
+                <button onclick="navigateTo('dashboard')">Dashboard</button>
+                <button onclick="navigateTo('budget-set')">Set Budget</button>
+                <button onclick="navigateTo('savings')">Savings</button>
+                <button onclick="navigateTo('settings')">Settings</button>
+                <button onclick="logout()">Logout</button>
+            </nav>
+
+            <div id="sections">
+                <div id="expense-tracking" class="hidden">
+                    <h2>Expense Tracking</h2>
+                    <input type="text" id="expense-description" placeholder="Expense Description">
+                    <input type="number" id="expense-amount" placeholder="Amount" step="0.01">
+                    <input type="date" id="expense-date">
+                    <button onclick="addExpense()">Add Expense</button>
+                    <div class="expense-list" id="expense-list">
+                        <h3>Expense List</h3>
+                    </div>
+                    <button onclick="clearExpenses()">Clear All Expenses</button>
+                    <div id="budget-alert" class="budget-alert"></div>
+                </div>
+
+                <div id="dashboard" class="hidden">
+                    <h2>Dashboard</h2>
+                    <canvas id="expense-chart"></canvas>
+                    <p>Showing daily expenses for the current month.</p>
+                </div>
+
+                <div id="budget-set" class="hidden">
+                    <h2>Set Budget</h2>
+                    <input type="number" id="budget-amount" placeholder="Set Budget" step="0.01">
+                    <button onclick="setBudget()">Set Budget</button>
+                    <button onclick="goBack()">Back</button>
+                </div>
+
+                <div id="savings" class="hidden">
+                    <h2>Savings</h2>
+                    <div id="savings-display"></div>
+                    <button onclick="goBack()">Back</button>
+                </div>
+
+                <div id="settings" class="hidden">
+                    <h2>Settings</h2>
+                    <button onclick="deleteAccount()">Delete Account</button>
+                    <button onclick="goBack()">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let navigationHistory = [];
+        let currentUser = null;
+
+        function navigateTo(section) {
+            const currentSection = document.querySelector('#sections > div:not(.hidden)');
+            if (currentSection) {
+                navigationHistory.push(currentSection.id);
+            }
+            document.querySelectorAll('#sections > div').forEach(div => div.classList.add('hidden'));
+            document.getElementById(section).classList.remove('hidden');
+
+            if (section === 'dashboard') {
+                renderDashboard();
+            }
+        }
+
+        function goBack() {
+            if (navigationHistory.length > 0) {
+                const previousSection = navigationHistory.pop();
+                document.querySelectorAll('#sections > div').forEach(div => div.classList.add('hidden'));
+                document.getElementById(previousSection).classList.remove('hidden');
+            }
+        }
+
+        function showSignup() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('signup-form').classList.remove('hidden');
+        }
+
+        function showLogin() {
+            document.getElementById('login-form').classList.remove('hidden');
+            document.getElementById('signup-form').classList.add('hidden');
+        }
+
+        function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const storedPassword = localStorage.getItem(username + '-password');
+
+            if (storedPassword && storedPassword === password) {
+                alert('Login successful');
+                currentUser = username;
+                document.getElementById('auth').classList.add('hidden');
+                document.getElementById('home').classList.remove('hidden');
+                renderExpenses();
+                renderSavings();
+            } else {
+                alert('Invalid username or password');
+            }
+        }
+
+        function signup() {
+            const username = document.getElementById('signup-username').value;
+            const password = document.getElementById('signup-password').value;
+            const salary = parseFloat(document.getElementById('signup-salary').value);
+
+            if (username.length >= 8 && password.length >= 8 && /[0-9]{3,}/.test(password) && salary > 0) {
+                localStorage.setItem(username + '-password', password);
+                localStorage.setItem(username + '-salary', salary);
+                alert('Signup successful, please log in.');
+                showLogin();
+            } else {
+                alert('Invalid input. Ensure your username and password meet the criteria.');
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('auth').classList.remove('hidden');
+            document.getElementById('home').classList.add('hidden');
+        }
+
+        function addExpense() {
+            if (!currentUser) {
+                alert('Please log in first');
+                return;
+            }
+
+            const description = document.getElementById('expense-description').value;
+            const amount = parseFloat(document.getElementById('expense-amount').value);
+            const date = document.getElementById('expense-date').value;
+
+            if (!description || isNaN(amount) || !date) {
+                alert('Please enter a valid description, amount, and date');
+                return;
+            }
+
+            const expense = { description, amount, date };
+
+            const expensesKey = currentUser + '-expenses';
+            const expenses = JSON.parse(localStorage.getItem(expensesKey) || '[]');
+            expenses.push(expense);
+
+            localStorage.setItem(expensesKey, JSON.stringify(expenses));
+            renderExpenses();
+            checkBudgetExceeded();
+            updateSavings();
+        }
+
+        function renderExpenses() {
+            if (!currentUser) return;
+
+            const expensesKey = currentUser + '-expenses';
+            const expenseList = document.getElementById('expense-list');
+            const expenses = JSON.parse(localStorage.getItem(expensesKey) || '[]');
+            expenseList.innerHTML = expenses.map(expense => `
+                <div class="expense-item">
+                    ${expense.description}: ${expense.amount} on ${expense.date}
+                </div>
+            `).join('');
+        }
+
+        function clearExpenses() {
+            if (confirm('Are you sure you want to clear all expenses?')) {
+                const expensesKey = currentUser + '-expenses';
+                localStorage.removeItem(expensesKey);
+                renderExpenses();
+                updateSavings();
+            }
+        }
+
+        function setBudget() {
+            const amount = parseFloat(document.getElementById('budget-amount').value);
+            if (isNaN(amount)) {
+                alert('Please enter a valid budget amount');
+                return;
+            }
+            localStorage.setItem(currentUser + '-budget', amount);
+            checkBudgetExceeded();
+        }
+
+        function checkBudgetExceeded() {
+            const budget = parseFloat(localStorage.getItem(currentUser + '-budget') || '0');
+            const expensesKey = currentUser + '-expenses';
+            const expenses = JSON.parse(localStorage.getItem(expensesKey) || '[]');
+            const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+            if (totalExpenses > budget) {
+                document.getElementById('budget-alert').innerText = 'Warning: You have exceeded your budget!';
+            } else {
+                document.getElementById('budget-alert').innerText = '';
+            }
+        }
+
+        function renderDashboard() {
+            const expensesKey = currentUser + '-expenses';
+            const expenses = JSON.parse(localStorage.getItem(expensesKey) || '[]');
+            const chartData = {};
+            expenses.forEach(expense => {
+                const date = new Date(expense.date);
+                const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+                chartData[dateKey] = (chartData[dateKey] || 0) + expense.amount;
+            });
+
+            const labels = Object.keys(chartData);
+            const data = Object.values(chartData);
+
+            const ctx = document.getElementById('expense-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Expenses',
+                        data: data,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateSavings() {
+            const salary = parseFloat(localStorage.getItem(currentUser + '-salary') || 0);
+            const expenses = JSON.parse(localStorage.getItem(currentUser + '-expenses') || '[]');
+            const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+            const savings = salary - totalExpenses;
+
+            document.getElementById('savings-display').innerText = Your savings: ${savings};
+        }
+
+        function deleteAccount() {
+            if (confirm('Are you sure you want to delete your account?')) {
+                localStorage.removeItem(currentUser + '-password');
+                localStorage.removeItem(currentUser + '-salary');
+                localStorage.removeItem(currentUser + '-expenses');
+                alert('Your account has been deleted.');
+                logout();
+            }
+        }
+    </script>
+</body>
+</html>
